@@ -41,6 +41,7 @@ class Cafe(Base):
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     is_saved = Column(Boolean, default=False)
+    is_shared = Column(Boolean, default=False)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 

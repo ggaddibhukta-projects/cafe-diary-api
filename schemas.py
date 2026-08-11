@@ -86,6 +86,7 @@ class CafeUpdate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     is_saved: Optional[bool] = None
+    is_shared: Optional[bool] = None
 
 
 class CafeResponse(BaseModel):
@@ -99,6 +100,7 @@ class CafeResponse(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     is_saved: bool
+    is_shared: bool = False
     created_at: datetime
 
     class Config:
