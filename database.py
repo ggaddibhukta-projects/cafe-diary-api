@@ -2,8 +2,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# SQLite database file — stored alongside the API code
-SQLALCHEMY_DATABASE_URL = "sqlite:///./cafe_diary.db"
+import os
+
+# SQLite database file — use /tmp on Render (ephemeral but writable)
+if os.environ.get("RENDER"):
+    SQLALCHEMY_DATABASE_URL = "sqlite:////tmp/cafe_diary.db"
+else:
+    SQLALCHEMY_DATABASE_URL = "sqlite:///./cafe_diary.db"
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
