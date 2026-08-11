@@ -66,6 +66,15 @@ def get_last_email_result():
     return result
 
 
+@app.delete("/api/admin/delete-all-users")
+def delete_all_users(db: Session = Depends(get_db)):
+    """Admin: delete all users from the database."""
+    count = db.query(User).count()
+    db.query(User).delete()
+    db.commit()
+    return {"message": f"Deleted {count} users"}
+
+
 # ═══════════════════════════════════════════════════════════════
 #  AUTH ENDPOINTS
 # ═══════════════════════════════════════════════════════════════
