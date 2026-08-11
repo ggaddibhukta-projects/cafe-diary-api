@@ -75,6 +75,27 @@ def delete_all_users(db: Session = Depends(get_db)):
     return {"message": f"Deleted {count} users"}
 
 
+@app.post("/api/admin/reset-db")
+def reset_database():
+    """Admin: drop and recreate all tables (fresh schema)."""
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    return {"message": "Database tables dropped and recreated successfully"}
+
+
+@app.get("/api/admin/db-stats")
+def db_stats(db: Session = Depends(get_db)):
+    """Admin: view database stats."""
+    user_count = db.query(User).count()
+    cafe_count = db.query(Cafe).count()
+    users = db.query(User).all()
+    return {
+        "users": user_count,
+        "cafes": cafe_count,
+        "user_list": [{"id": u.id, "name": u.name, "email": u.email} for u in users],
+    }
+
+
 # ═══════════════════════════════════════════════════════════════
 #  AUTH ENDPOINTS
 # ═══════════════════════════════════════════════════════════════
