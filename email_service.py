@@ -1,47 +1,28 @@
-import smtplib
 import os
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import json
+from urllib.request import Request, urlopen
+from urllib.error import URLError
 
 
-# ─── Gmail SMTP Configuration ──────────────────────────────────
-# Set these as environment variables on Render:
-#   SMTP_EMAIL = your Gmail address
-#   SMTP_PASSWORD = your Gmail App Password (NOT your regular password)
+# ─── Resend Email Configuration ────────────────────────────────
+# Set this as an environment variable on Render:
+#   RESEND_API_KEY = your Resend API key (free at resend.com)
 
-SMTP_EMAIL = os.environ.get("SMTP_EMAIL", "")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
-SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 587
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 
 
 def send_otp_email(to_email: str, otp_code: str, user_name: str) -> bool:
     """
-    Send a 6-digit OTP verification email via Gmail SMTP.
-    Returns True if sent successfully, False otherwise.
+    Send a 6-digit OTP verification email via Resend API (HTTPS).
+    Works on all cloud platforms including Render free tier.
+    
+    Free tier: 100 emails/day, sends from onboarding@resend.dev
     """
-    if not SMTP_EMAIL or not SMTP_PASSWORD:
-        print(f"\n⚠️  SMTP not configured. OTP for {to_email}: {otp_code}")
+    if not RESEND_API_KEY:
+        print(f"\n⚠️  RESEND_API_KEY not set. OTP for {to_email}: {otp_code}")
         return False
 
-    # Build the email
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Cafe Diary - Your verification code is {otp_code}"
-    msg["From"] = f"Cafe Diary <{SMTP_EMAIL}>"
-    msg["To"] = to_email
-
-    # Plain text fallback
-    text_body = f"""
-Hi {user_name},
-
-Your Cafe Diary verification code is: {otp_code}
-
-This code expires in 10 minutes. If you didn't create an account, please ignore this email.
-
-- Cafe Diary Team
-"""
-
-    # HTML email (looks great on mobile)
+    # Beautiful HTML email matching Café Diary design
     html_body = f"""
 <!DOCTYPE html>
 <html>
@@ -54,21 +35,18 @@ This code expires in 10 minutes. If you didn't create an account, please ignore 
     <tr>
       <td align="center">
         <table width="100%" style="max-width:420px; background:#FFFFFF; border-radius:16px; overflow:hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.08);">
-          <!-- Header -->
           <tr>
             <td style="background-color:#1C1917; padding: 32px 24px; text-align:center;">
               <div style="font-size:40px; margin-bottom:8px;">&#9749;</div>
-              <h1 style="color:#FFFFFF; font-size:22px; margin:0; font-weight:800; letter-spacing:-0.3px;">Cafe Diary</h1>
+              <h1 style="color:#FFFFFF; font-size:22px; margin:0; font-weight:800;">Cafe Diary</h1>
             </td>
           </tr>
-          <!-- Body -->
           <tr>
             <td style="padding: 32px 24px;">
               <p style="color:#44403C; font-size:15px; margin:0 0 8px;">Hi <strong>{user_name}</strong>,</p>
               <p style="color:#78716C; font-size:14px; margin:0 0 24px; line-height:1.5;">
                 Enter this code to verify your email and start your coffee journey.
               </p>
-              <!-- OTP Code Box -->
               <div style="background:#F5F5F0; border-radius:12px; padding:20px; text-align:center; margin-bottom:24px; border: 1px solid #E7E5E4;">
                 <span style="font-size:32px; font-weight:800; letter-spacing:8px; color:#1C1917;">{otp_code}</span>
               </div>
@@ -77,7 +55,6 @@ This code expires in 10 minutes. If you didn't create an account, please ignore 
               </p>
             </td>
           </tr>
-          <!-- Footer -->
           <tr>
             <td style="padding: 16px 24px 24px; border-top: 1px solid #F5F5F0;">
               <p style="color:#A8A29E; font-size:11px; margin:0; text-align:center; line-height:1.5;">
@@ -93,17 +70,33 @@ This code expires in 10 minutes. If you didn't create an account, please ignore 
 </html>
 """
 
-    msg.attach(MIMEText(text_body, "plain"))
-    msg.attach(MIMEText(html_body, "html"))
+    payload = json.dumps({
+        "from": "Cafe Diary <onboarding@resend.dev>",
+        "to": [to_email],
+        "subject": f"Your Cafe Diary verification code: {otp_code}",
+        "html": html_body,
+    }).encode("utf-8")
+
+    req = Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
 
     try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_EMAIL, SMTP_PASSWORD)
-            server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
-        print(f"✅ OTP email sent to {to_email}")
-        return True
-    except Exception as e:
+        with urlopen(req, timeout=15) as resp:
+            result = json.loads(resp.read().decode())
+            print(f"✅ OTP email sent to {to_email} (id: {result.get('id', 'unknown')})")
+            return True
+    except URLError as e:
         print(f"❌ Failed to send email to {to_email}: {e}")
+        print(f"   Fallback — OTP code: {otp_code}")
+        return False
+    except Exception as e:
+        print(f"❌ Email error: {e}")
         print(f"   Fallback — OTP code: {otp_code}")
         return False
