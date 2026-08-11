@@ -17,7 +17,7 @@ from schemas import (
     CafeCreate, CafeUpdate, CafeResponse,
 )
 from auth import hash_password, verify_password, create_access_token, get_current_user
-from email_service import send_otp_email
+from email_service import send_otp_email, last_email_result
 
 # ─── Create all tables on startup ───────────────────────────────
 
@@ -59,44 +59,11 @@ def email_status():
         "render_env": bool(os.environ.get("RENDER")),
     }
 
-
-@app.get("/api/test-email/{email}")
-def test_email(email: str):
-    """Debug: send a test email and return raw Resend response."""
-    import os
-    from urllib.request import Request, urlopen
-    from urllib.error import URLError, HTTPError
-    
-    key = os.environ.get("RESEND_API_KEY", "")
-    if not key:
-        return {"error": "RESEND_API_KEY not set"}
-    
-    payload = json.dumps({
-        "from": "Cafe Diary <onboarding@resend.dev>",
-        "to": [email],
-        "subject": "Test from Cafe Diary",
-        "html": "<h1>Hello! This is a test email from Cafe Diary.</h1>",
-    }).encode("utf-8")
-    
-    req = Request(
-        "https://api.resend.com/emails",
-        data=payload,
-        headers={
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    
-    try:
-        with urlopen(req, timeout=15) as resp:
-            body = resp.read().decode()
-            return {"status": resp.status, "response": json.loads(body)}
-    except HTTPError as e:
-        body = e.read().decode()
-        return {"status": e.code, "error": json.loads(body)}
-    except Exception as e:
-        return {"error": str(e)}
+@app.get("/api/last-email-result")
+def get_last_email_result():
+    """Debug: shows what happened during the last email send attempt."""
+    from email_service import last_email_result as result
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════

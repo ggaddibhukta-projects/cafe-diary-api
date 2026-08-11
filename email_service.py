@@ -1,35 +1,27 @@
 import os
 import json
 from urllib.request import Request, urlopen
-from urllib.error import URLError
+from urllib.error import URLError, HTTPError
 
 
 # ─── Resend Email Configuration ────────────────────────────────
-# Set this as an environment variable on Render:
-#   RESEND_API_KEY = your Resend API key (free at resend.com)
-
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+
+# Store last error for debugging
+last_email_result = {"status": "not_called"}
 
 
 def send_otp_email(to_email: str, otp_code: str, user_name: str) -> bool:
-    """
-    Send a 6-digit OTP verification email via Resend API (HTTPS).
-    Works on all cloud platforms including Render free tier.
+    global last_email_result
     
-    Free tier: 100 emails/day, sends from onboarding@resend.dev
-    """
     if not RESEND_API_KEY:
+        last_email_result = {"status": "error", "detail": "RESEND_API_KEY not set"}
         print(f"\n⚠️  RESEND_API_KEY not set. OTP for {to_email}: {otp_code}")
         return False
 
-    # Beautiful HTML email matching Café Diary design
     html_body = f"""
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
 <body style="margin:0; padding:0; background-color:#F5F5F0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F5F5F0; padding: 40px 20px;">
     <tr>
@@ -89,14 +81,21 @@ def send_otp_email(to_email: str, otp_code: str, user_name: str) -> bool:
 
     try:
         with urlopen(req, timeout=15) as resp:
-            result = json.loads(resp.read().decode())
-            print(f"✅ OTP email sent to {to_email} (id: {result.get('id', 'unknown')})")
+            body = resp.read().decode()
+            result = json.loads(body)
+            last_email_result = {"status": "success", "resend_id": result.get("id"), "to": to_email}
+            print(f"✅ OTP email sent to {to_email} (id: {result.get('id')})")
             return True
+    except HTTPError as e:
+        body = e.read().decode()
+        last_email_result = {"status": "http_error", "code": e.code, "body": body, "to": to_email}
+        print(f"❌ HTTP {e.code} from Resend: {body}")
+        return False
     except URLError as e:
-        print(f"❌ Failed to send email to {to_email}: {e}")
-        print(f"   Fallback — OTP code: {otp_code}")
+        last_email_result = {"status": "url_error", "reason": str(e.reason), "to": to_email}
+        print(f"❌ URL Error: {e.reason}")
         return False
     except Exception as e:
-        print(f"❌ Email error: {e}")
-        print(f"   Fallback — OTP code: {otp_code}")
+        last_email_result = {"status": "exception", "error": str(e), "to": to_email}
+        print(f"❌ Exception: {e}")
         return False
