@@ -109,29 +109,22 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
             detail="Password must be at least 6 characters",
         )
 
-    # Generate OTP
-    otp = generate_otp(6)
-    otp_expires = datetime.utcnow() + timedelta(minutes=10)
-
-    # Create user
+    # Create user (verified immediately — no OTP needed)
     user = User(
         name=req.name,
         email=req.email,
         phone=req.phone,
         password_hash=hash_password(req.password),
-        is_verified=False,
-        otp_code=otp,
-        otp_expires_at=otp_expires,
+        is_verified=True,
+        otp_code=None,
+        otp_expires_at=None,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    # Send OTP via email
-    send_otp_email(req.email, otp, req.name)
-
     return MessageResponse(
-        message=f"Registration successful! A 6-digit verification code has been sent to {req.email}."
+        message="Account created successfully! You can now sign in."
     )
 
 
@@ -229,11 +222,7 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
             detail="Invalid email or password",
         )
 
-    if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email before signing in",
-        )
+    # Email verification check removed — accounts are auto-verified
 
     token = create_access_token(user.id)
 
