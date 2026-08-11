@@ -4,16 +4,24 @@ from sqlalchemy.orm import sessionmaker
 
 import os
 
-# SQLite database file — use /tmp on Render (ephemeral but writable)
-if os.environ.get("RENDER"):
-    SQLALCHEMY_DATABASE_URL = "sqlite:////tmp/cafe_diary.db"
+# ─── Database Configuration ────────────────────────────────────
+# On Render: uses PostgreSQL via DATABASE_URL env var (persistent)
+# Locally: uses SQLite file (for dev convenience)
+
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+
+if DATABASE_URL:
+    # Render provides postgres:// but SQLAlchemy needs postgresql://
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    SQLALCHEMY_DATABASE_URL = DATABASE_URL
+    engine = create_engine(SQLALCHEMY_DATABASE_URL)
 else:
     SQLALCHEMY_DATABASE_URL = "sqlite:///./cafe_diary.db"
-
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False}  # Required for SQLite
-)
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL,
+        connect_args={"check_same_thread": False}  # Required for SQLite
+    )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
