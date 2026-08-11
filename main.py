@@ -96,6 +96,17 @@ def db_stats(db: Session = Depends(get_db)):
     }
 
 
+@app.get("/api/admin/migrate")
+def migrate_db(db: Session = Depends(get_db)):
+    """Temporary route to add image_url column."""
+    from sqlalchemy import text
+    try:
+        db.execute(text("ALTER TABLE cafes ADD COLUMN image_url VARCHAR(500);"))
+        db.commit()
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 # ═══════════════════════════════════════════════════════════════
 #  AUTH ENDPOINTS
 # ═══════════════════════════════════════════════════════════════
@@ -317,6 +328,7 @@ def create_cafe(
         notes=req.notes,
         latitude=req.latitude,
         longitude=req.longitude,
+        image_url=req.image_url,
     )
     db.add(cafe)
     db.commit()
