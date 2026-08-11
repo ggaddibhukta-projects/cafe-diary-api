@@ -6,6 +6,7 @@ from typing import List
 
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from database import engine, get_db, Base
@@ -386,6 +387,265 @@ def delete_cafe(
     db.delete(cafe)
     db.commit()
     return MessageResponse(message="Cafe deleted successfully")
+
+
+# ═══════════════════════════════════════════════════════════════
+#  PUBLIC SHARE ENDPOINT
+# ═══════════════════════════════════════════════════════════════
+
+@app.get("/shared/{user_id}/{city}", response_class=HTMLResponse)
+def get_shared_city_cafes(user_id: int, city: str, db: Session = Depends(get_db)):
+    """Public endpoint to view a user's cafes for a specific city."""
+    import urllib.parse
+    decoded_city = urllib.parse.unquote(city)
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    cafes = (
+        db.query(Cafe)
+        .filter(Cafe.user_id == user_id)
+        .filter(Cafe.city == decoded_city)
+        .order_by(Cafe.created_at.desc())
+        .all()
+    )
+    
+    # Generate HTML
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{user.name}'s Cafés in {decoded_city}</title>
+        <style>
+            :root {{
+                --bg: #F7F5F0;
+                --text-primary: #1C1917;
+                --text-secondary: #57534E;
+                --card-bg: #FFFFFF;
+                --border: #E7E5E4;
+                --primary: #44403C;
+                --radius: 12px;
+                --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            }}
+            * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                background-color: var(--bg);
+                color: var(--text-primary);
+                line-height: 1.5;
+                padding: 20px;
+                -webkit-font-smoothing: antialiased;
+            }}
+            .container {{
+                max-width: 800px;
+                margin: 0 auto;
+                padding-top: 40px;
+                padding-bottom: 60px;
+            }}
+            .header {{
+                text-align: center;
+                margin-bottom: 40px;
+            }}
+            .header h1 {{
+                font-size: 2.5rem;
+                font-weight: 800;
+                margin-bottom: 8px;
+                letter-spacing: -0.02em;
+            }}
+            .header p {{
+                color: var(--text-secondary);
+                font-size: 1.125rem;
+            }}
+            .empty-state {{
+                text-align: center;
+                padding: 40px;
+                background: var(--card-bg);
+                border-radius: var(--radius);
+                border: 1px dashed var(--border);
+                color: var(--text-secondary);
+            }}
+            .grid {{
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 24px;
+            }}
+            @media (min-width: 640px) {{
+                .grid {{ grid-template-columns: repeat(2, 1fr); }}
+            }}
+            .card {{
+                background: var(--card-bg);
+                border-radius: var(--radius);
+                overflow: hidden;
+                box-shadow: var(--shadow);
+                border: 1px solid var(--border);
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+                display: flex;
+                flex-direction: column;
+            }}
+            .card:hover {{
+                transform: translateY(-4px);
+                box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            }}
+            .card-image-wrapper {{
+                width: 100%;
+                padding-top: 66.66%; /* 3:2 Aspect Ratio */
+                position: relative;
+                background-color: #E6E0D4;
+            }}
+            .card-image {{
+                position: absolute;
+                top: 0; left: 0; width: 100%; height: 100%;
+                object-fit: cover;
+            }}
+            .card-image-fallback {{
+                position: absolute;
+                top: 0; left: 0; width: 100%; height: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 3rem;
+                color: rgba(0,0,0,0.1);
+            }}
+            .card-content {{
+                padding: 20px;
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+            }}
+            .card-title {{
+                font-size: 1.25rem;
+                font-weight: 700;
+                margin-bottom: 4px;
+            }}
+            .card-rating {{
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                font-weight: 600;
+                color: #CA8A04;
+                margin-bottom: 12px;
+                font-size: 0.9rem;
+            }}
+            .card-meta {{
+                font-size: 0.9rem;
+                color: var(--text-secondary);
+                margin-bottom: 12px;
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }}
+            .card-meta-item {{
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }}
+            .card-notes {{
+                font-size: 0.95rem;
+                color: var(--text-primary);
+                margin-bottom: 20px;
+                flex: 1;
+            }}
+            .map-btn {{
+                display: inline-block;
+                width: 100%;
+                text-align: center;
+                padding: 10px 16px;
+                background-color: var(--primary);
+                color: white;
+                text-decoration: none;
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 0.95rem;
+                transition: background-color 0.2s;
+            }}
+            .map-btn:hover {{
+                background-color: #292524;
+            }}
+            .footer {{
+                text-align: center;
+                margin-top: 60px;
+                padding-top: 20px;
+                border-top: 1px solid var(--border);
+                color: var(--text-secondary);
+                font-size: 0.9rem;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>{user.name}'s Cafés</h1>
+                <p>{len(cafes)} saved in {decoded_city}</p>
+            </div>
+            
+            <div class="grid">
+    """
+    
+    if not cafes:
+        html_content += f"""
+            </div>
+            <div class="empty-state">
+                <p>No cafes found for this city yet.</p>
+            </div>
+        """
+    else:
+        for cafe in cafes:
+            # Safely handle potential None values
+            rating_str = f"★ {cafe.rating:.1f}" if cafe.rating else "No rating"
+            drink_str = f"""
+                <div class="card-meta-item">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/></svg>
+                    <span>{cafe.drink}</span>
+                </div>
+            """ if cafe.drink else ""
+            
+            notes_str = f'<p class="card-notes">"{cafe.notes}"</p>' if cafe.notes else '<p class="card-notes"></p>'
+            
+            image_html = f'<img src="{cafe.image_url}" alt="{cafe.name}" class="card-image">' if cafe.image_url else '<div class="card-image-fallback">☕</div>'
+            
+            map_link = ""
+            if cafe.latitude and cafe.longitude:
+                map_url = f"https://www.google.com/maps/search/?api=1&query={cafe.latitude},{cafe.longitude}"
+                map_link = f'<a href="{map_url}" target="_blank" rel="noopener noreferrer" class="map-btn">View on Map</a>'
+            else:
+                map_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(cafe.name + ' ' + decoded_city)}"
+                map_link = f'<a href="{map_url}" target="_blank" rel="noopener noreferrer" class="map-btn">Search on Map</a>'
+
+            html_content += f"""
+                <div class="card">
+                    <div class="card-image-wrapper">
+                        {image_html}
+                    </div>
+                    <div class="card-content">
+                        <h2 class="card-title">{cafe.name}</h2>
+                        <div class="card-rating">{rating_str}</div>
+                        
+                        <div class="card-meta">
+                            {drink_str}
+                        </div>
+                        
+                        {notes_str}
+                        
+                        {map_link}
+                    </div>
+                </div>
+            """
+            
+        html_content += "</div>"
+        
+    html_content += """
+            <div class="footer">
+                Shared via Café Diary
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return HTMLResponse(content=html_content)
 
 
 # ═══════════════════════════════════════════════════════════════
