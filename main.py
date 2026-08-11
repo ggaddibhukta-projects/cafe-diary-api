@@ -16,6 +16,7 @@ from schemas import (
     CafeCreate, CafeUpdate, CafeResponse,
 )
 from auth import hash_password, verify_password, create_access_token, get_current_user
+from email_service import send_otp_email
 
 # ─── Create all tables on startup ───────────────────────────────
 
@@ -98,15 +99,11 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
-    # In production, send OTP via email service (SendGrid, SES, etc.)
-    # For local testing, we print it to the console
-    print(f"\n{'='*50}")
-    print(f"  📧 OTP for {req.email}: {otp}")
-    print(f"  ⏰ Expires at: {otp_expires}")
-    print(f"{'='*50}\n")
+    # Send OTP via email
+    send_otp_email(req.email, otp, req.name)
 
     return MessageResponse(
-        message=f"Registration successful! A 6-digit verification code has been sent to {req.email}. (Check server console for OTP)"
+        message=f"Registration successful! A 6-digit verification code has been sent to {req.email}."
     )
 
 
@@ -179,10 +176,8 @@ def resend_otp(req: ResendOTPRequest, db: Session = Depends(get_db)):
     user.otp_expires_at = otp_expires
     db.commit()
 
-    print(f"\n{'='*50}")
-    print(f"  📧 NEW OTP for {req.email}: {otp}")
-    print(f"  ⏰ Expires at: {otp_expires}")
-    print(f"{'='*50}\n")
+    # Send new OTP via email
+    send_otp_email(req.email, otp, user.name)
 
     return MessageResponse(message=f"A new verification code has been sent to {req.email}")
 
