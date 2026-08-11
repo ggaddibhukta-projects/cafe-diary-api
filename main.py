@@ -47,6 +47,18 @@ def generate_otp(length: int = 6) -> str:
     return "".join(random.choices(string.digits, k=length))
 
 
+@app.get("/api/email-status")
+def email_status():
+    """Debug: check if email service is configured."""
+    import os
+    key = os.environ.get("RESEND_API_KEY", "")
+    return {
+        "resend_configured": bool(key),
+        "key_prefix": key[:8] + "..." if len(key) > 8 else "NOT SET",
+        "render_env": bool(os.environ.get("RENDER")),
+    }
+
+
 # ═══════════════════════════════════════════════════════════════
 #  AUTH ENDPOINTS
 # ═══════════════════════════════════════════════════════════════
