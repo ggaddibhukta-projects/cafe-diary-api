@@ -26,19 +26,19 @@ def send_otp_email(to_email: str, otp_code: str, user_name: str) -> bool:
 
     # Build the email
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"☕ Café Diary — Your verification code is {otp_code}"
-    msg["From"] = f"Café Diary <{SMTP_EMAIL}>"
+    msg["Subject"] = f"Cafe Diary - Your verification code is {otp_code}"
+    msg["From"] = f"Cafe Diary <{SMTP_EMAIL}>"
     msg["To"] = to_email
 
     # Plain text fallback
     text_body = f"""
 Hi {user_name},
 
-Your Café Diary verification code is: {otp_code}
+Your Cafe Diary verification code is: {otp_code}
 
 This code expires in 10 minutes. If you didn't create an account, please ignore this email.
 
-— Café Diary Team ☕
+- Cafe Diary Team
 """
 
     # HTML email (looks great on mobile)
@@ -57,8 +57,8 @@ This code expires in 10 minutes. If you didn't create an account, please ignore 
           <!-- Header -->
           <tr>
             <td style="background-color:#1C1917; padding: 32px 24px; text-align:center;">
-              <div style="font-size:40px; margin-bottom:8px;">☕</div>
-              <h1 style="color:#FFFFFF; font-size:22px; margin:0; font-weight:800; letter-spacing:-0.3px;">Café Diary</h1>
+              <div style="font-size:40px; margin-bottom:8px;">&#9749;</div>
+              <h1 style="color:#FFFFFF; font-size:22px; margin:0; font-weight:800; letter-spacing:-0.3px;">Cafe Diary</h1>
             </td>
           </tr>
           <!-- Body -->
@@ -81,7 +81,7 @@ This code expires in 10 minutes. If you didn't create an account, please ignore 
           <tr>
             <td style="padding: 16px 24px 24px; border-top: 1px solid #F5F5F0;">
               <p style="color:#A8A29E; font-size:11px; margin:0; text-align:center; line-height:1.5;">
-                If you didn't create a Café Diary account, you can safely ignore this email.
+                If you didn't create a Cafe Diary account, you can safely ignore this email.
               </p>
             </td>
           </tr>
