@@ -604,7 +604,8 @@ def get_shared_city_cafes(user_id: int, city: str, db: Session = Depends(get_db)
             
             notes_str = f'<p class="card-notes">"{cafe.notes}"</p>' if cafe.notes else '<p class="card-notes"></p>'
             
-            image_html = f'<img src="{cafe.image_url}" alt="{cafe.name}" class="card-image">' if cafe.image_url else '<div class="card-image-fallback">☕</div>'
+            image_src = cafe.image_url.split(',')[0] if cafe.image_url else None
+            image_html = f'<img src="{image_src}" alt="{cafe.name}" class="card-image">' if image_src else '<div class="card-image-fallback">☕</div>'
             
             map_link = ""
             if cafe.latitude and cafe.longitude:
@@ -639,6 +640,225 @@ def get_shared_city_cafes(user_id: int, city: str, db: Session = Depends(get_db)
     html_content += """
             <div class="footer">
                 Shared via Café Diary
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return HTMLResponse(content=html_content)
+
+@app.get("/shared/{user_id}/cafe/{cafe_id}", response_class=HTMLResponse)
+def get_shared_single_cafe(user_id: int, cafe_id: int, db: Session = Depends(get_db)):
+    """Public endpoint to view a single shared cafe."""
+    import urllib.parse
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    cafe = (
+        db.query(Cafe)
+        .filter(Cafe.user_id == user_id)
+        .filter(Cafe.id == cafe_id)
+        .first()
+    )
+    
+    if not cafe:
+        raise HTTPException(status_code=404, detail="Cafe not found")
+    
+    rating_str = f"★ {cafe.rating:.1f}" if cafe.rating else "No rating"
+    drink_str = f"""
+        <div class="card-meta-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/></svg>
+            <span>{cafe.drink}</span>
+        </div>
+    """ if cafe.drink else ""
+    
+    notes_str = f'<p class="card-notes">"{cafe.notes}"</p>' if cafe.notes else '<p class="card-notes"></p>'
+    
+    image_src = cafe.image_url.split(',')[0].strip() if cafe.image_url else None
+    image_html = f'<img src="{image_src}" alt="{cafe.name}" class="card-image">' if image_src else '<div class="card-image-fallback">☕</div>'
+    
+    map_link = ""
+    if cafe.latitude and cafe.longitude:
+        map_url = f"https://www.google.com/maps/search/?api=1&query={cafe.latitude},{cafe.longitude}"
+        map_link = f'<a href="{map_url}" target="_blank" rel="noopener noreferrer" class="map-btn">View on Map</a>'
+    else:
+        map_url = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(cafe.name + ' ' + cafe.city)}"
+        map_link = f'<a href="{map_url}" target="_blank" rel="noopener noreferrer" class="map-btn">Search on Map</a>'
+        
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{cafe.name} - Shared by {user.name}</title>
+        <style>
+            :root {{
+                --bg: #F7F5F0;
+                --text-primary: #1C1917;
+                --text-secondary: #57534E;
+                --card-bg: #FFFFFF;
+                --border: #E7E5E4;
+                --primary: #44403C;
+                --radius: 12px;
+                --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            }}
+            * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                background-color: var(--bg);
+                color: var(--text-primary);
+                line-height: 1.5;
+                padding: 20px;
+                -webkit-font-smoothing: antialiased;
+            }}
+            .container {{
+                max-width: 600px;
+                margin: 0 auto;
+                padding-top: 40px;
+                padding-bottom: 60px;
+            }}
+            .header {{
+                text-align: center;
+                margin-bottom: 40px;
+            }}
+            .header h1 {{
+                font-size: 2.5rem;
+                font-weight: 800;
+                margin-bottom: 8px;
+                letter-spacing: -0.02em;
+            }}
+            .header p {{
+                color: var(--text-secondary);
+                font-size: 1.125rem;
+            }}
+            .card {{
+                background: var(--card-bg);
+                border-radius: var(--radius);
+                overflow: hidden;
+                box-shadow: var(--shadow);
+                border: 1px solid var(--border);
+                display: flex;
+                flex-direction: column;
+            }}
+            .card-image-wrapper {{
+                width: 100%;
+                padding-top: 66.66%;
+                position: relative;
+                background-color: #E6E0D4;
+            }}
+            .card-image {{
+                position: absolute;
+                top: 0; left: 0; width: 100%; height: 100%;
+                object-fit: cover;
+            }}
+            .card-image-fallback {{
+                position: absolute;
+                top: 0; left: 0; width: 100%; height: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 4rem;
+                color: rgba(0,0,0,0.1);
+            }}
+            .card-content {{
+                padding: 24px;
+                display: flex;
+                flex-direction: column;
+            }}
+            .card-title {{
+                font-size: 1.5rem;
+                font-weight: 700;
+                margin-bottom: 4px;
+            }}
+            .card-rating {{
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                font-weight: 600;
+                color: #CA8A04;
+                margin-bottom: 12px;
+                font-size: 1rem;
+            }}
+            .card-meta {{
+                font-size: 1rem;
+                color: var(--text-secondary);
+                margin-bottom: 16px;
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+            }}
+            .card-meta-item {{
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }}
+            .card-notes {{
+                font-size: 1.05rem;
+                color: var(--text-primary);
+                margin-bottom: 24px;
+                line-height: 1.6;
+            }}
+            .map-btn {{
+                display: inline-block;
+                width: 100%;
+                text-align: center;
+                padding: 12px 16px;
+                background-color: var(--primary);
+                color: white;
+                text-decoration: none;
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 1rem;
+                transition: background-color 0.2s;
+            }}
+            .map-btn:hover {{
+                background-color: #292524;
+            }}
+            .footer {{
+                text-align: center;
+                margin-top: 60px;
+                padding-top: 20px;
+                border-top: 1px solid var(--border);
+                color: var(--text-secondary);
+                font-size: 0.9rem;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>{user.name}'s Café Pick</h1>
+                <p>Shared via Café Diary</p>
+            </div>
+            
+            <div class="card">
+                <div class="card-image-wrapper">
+                    {image_html}
+                </div>
+                <div class="card-content">
+                    <h2 class="card-title">{cafe.name}</h2>
+                    <div class="card-rating">{rating_str}</div>
+                    
+                    <div class="card-meta">
+                        {drink_str}
+                        <div class="card-meta-item">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                            <span>{cafe.city}</span>
+                        </div>
+                    </div>
+                    
+                    {notes_str}
+                    
+                    {map_link}
+                </div>
+            </div>
+            
+            <div class="footer">
+                Download Café Diary to save your own spots
             </div>
         </div>
     </body>
