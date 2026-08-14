@@ -677,8 +677,13 @@ def get_shared_single_cafe(user_id: int, cafe_id: int, db: Session = Depends(get
     
     notes_str = f'<p class="card-notes">"{cafe.notes}"</p>' if cafe.notes else '<p class="card-notes"></p>'
     
-    image_src = cafe.image_url.split(',')[0].strip() if cafe.image_url else None
-    image_html = f'<img src="{image_src}" alt="{cafe.name}" class="card-image">' if image_src else '<div class="card-image-fallback">☕</div>'
+    images = [u.strip() for u in cafe.image_url.split(',') if u.strip() and u.strip() != 'null'] if cafe.image_url else []
+    if images:
+        imgs_html = ''.join(f'<img src="{u}" alt="{cafe.name}" class="gallery-img">' for u in images)
+        dots_html = ''.join(f'<span class="dot" onclick="goTo({i})"></span>' for i in range(len(images))) if len(images) > 1 else ''
+        image_html = f'<div class="gallery" id="gallery">{imgs_html}</div><div class="dots" id="dots">{dots_html}</div>'
+    else:
+        image_html = '<div class="card-image-fallback">☕</div>'
     
     map_link = ""
     if cafe.latitude and cafe.longitude:
@@ -744,20 +749,48 @@ def get_shared_single_cafe(user_id: int, cafe_id: int, db: Session = Depends(get
                 display: flex;
                 flex-direction: column;
             }}
-            .card-image-wrapper {{
-                width: 100%;
-                padding-top: 66.66%;
+            .gallery-container {{
                 position: relative;
+                width: 100%;
                 background-color: #E6E0D4;
+                overflow: hidden;
             }}
-            .card-image {{
-                position: absolute;
-                top: 0; left: 0; width: 100%; height: 100%;
+            .gallery {{
+                display: flex;
+                overflow-x: auto;
+                scroll-snap-type: x mandatory;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+            }}
+            .gallery::-webkit-scrollbar {{ display: none; }}
+            .gallery-img {{
+                flex: 0 0 100%;
+                width: 100%;
+                height: 300px;
                 object-fit: cover;
+                scroll-snap-align: start;
+            }}
+            .dots {{
+                display: flex;
+                justify-content: center;
+                gap: 6px;
+                padding: 10px 0;
+                background: #E6E0D4;
+            }}
+            .dot {{
+                width: 7px;
+                height: 7px;
+                border-radius: 50%;
+                background: rgba(0,0,0,0.2);
+                cursor: pointer;
+                transition: background 0.2s;
+            }}
+            .dot.active {{
+                background: rgba(0,0,0,0.6);
             }}
             .card-image-fallback {{
-                position: absolute;
-                top: 0; left: 0; width: 100%; height: 100%;
+                width: 100%;
+                height: 300px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -836,7 +869,7 @@ def get_shared_single_cafe(user_id: int, cafe_id: int, db: Session = Depends(get
             </div>
             
             <div class="card">
-                <div class="card-image-wrapper">
+                <div class="gallery-container">
                     {image_html}
                 </div>
                 <div class="card-content">
@@ -864,7 +897,29 @@ def get_shared_single_cafe(user_id: int, cafe_id: int, db: Session = Depends(get
     </body>
     </html>
     """
-    
+
+    # Inject gallery scroll JS for multiple images
+    if len(images) > 1:
+        gallery_js = """
+    <script>
+        var gallery = document.getElementById('gallery');
+        var dots = document.querySelectorAll('.dot');
+        function updateDots(idx) {
+            dots.forEach(function(d, i) { d.classList.toggle('active', i === idx); });
+        }
+        updateDots(0);
+        gallery.addEventListener('scroll', function() {
+            var idx = Math.round(gallery.scrollLeft / gallery.clientWidth);
+            updateDots(idx);
+        });
+        function goTo(idx) {
+            gallery.scrollTo({ left: idx * gallery.clientWidth, behavior: 'smooth' });
+            updateDots(idx);
+        }
+    </script>
+    </body>"""
+        html_content = html_content.replace('    </body>\n    </html>', gallery_js + '\n    </html>')
+
     return HTMLResponse(content=html_content)
 
 
