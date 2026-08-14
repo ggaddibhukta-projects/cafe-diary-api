@@ -894,6 +894,7 @@ def get_shared_single_cafe(user_id: int, cafe_id: int, db: Session = Depends(get
                 Download Café Diary to save your own spots
             </div>
         </div>
+        <!-- INJECT_SCRIPTS -->
     </body>
     </html>
     """
@@ -916,9 +917,8 @@ def get_shared_single_cafe(user_id: int, cafe_id: int, db: Session = Depends(get
             gallery.scrollTo({ left: idx * gallery.clientWidth, behavior: 'smooth' });
             updateDots(idx);
         }
-    </script>
-    </body>"""
-        html_content = html_content.replace('    </body>\n    </html>', gallery_js + '\n    </html>')
+    </script>"""
+        html_content = html_content.replace('<!-- INJECT_SCRIPTS -->', gallery_js)
 
     return HTMLResponse(content=html_content)
 

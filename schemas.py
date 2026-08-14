@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
 
@@ -70,7 +70,7 @@ class CafeCreate(BaseModel):
     name: str
     city: str = "Unknown"
     drink: Optional[str] = None
-    rating: float = 0.0
+    rating: float = Field(default=0.0, ge=0.0, le=5.0)
     notes: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
@@ -82,7 +82,7 @@ class CafeUpdate(BaseModel):
     name: Optional[str] = None
     city: Optional[str] = None
     drink: Optional[str] = None
-    rating: Optional[float] = None
+    rating: Optional[float] = Field(default=None, ge=0.0, le=5.0)
     notes: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None

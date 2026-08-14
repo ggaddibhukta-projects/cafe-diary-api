@@ -42,7 +42,7 @@ class Cafe(Base):
     longitude = Column(Float, nullable=True)
     is_saved = Column(Boolean, default=False)
     is_shared = Column(Boolean, default=False)
-    image_url = Column(String(500), nullable=True)
+    image_url = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
