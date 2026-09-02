@@ -97,6 +97,35 @@ def db_stats(db: Session = Depends(get_db)):
     }
 
 
+@app.get("/api/admin/export-all")
+def export_all(db: Session = Depends(get_db)):
+    """TEMPORARY: Full data export for migration. Remove after migration is complete."""
+    users = db.query(User).all()
+    cafes = db.query(Cafe).all()
+    return {
+        "users": [
+            {
+                "id": u.id, "name": u.name, "email": u.email,
+                "phone": u.phone, "password_hash": u.password_hash,
+                "is_verified": u.is_verified,
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+            }
+            for u in users
+        ],
+        "cafes": [
+            {
+                "id": c.id, "user_id": c.user_id, "name": c.name,
+                "city": c.city, "drink": c.drink, "rating": c.rating,
+                "notes": c.notes, "latitude": c.latitude, "longitude": c.longitude,
+                "is_saved": c.is_saved, "is_shared": c.is_shared,
+                "image_url": c.image_url,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+            }
+            for c in cafes
+        ],
+    }
+
+
 @app.get("/api/admin/migrate")
 def migrate_db(db: Session = Depends(get_db)):
     """Temporary route to add image_url column."""
