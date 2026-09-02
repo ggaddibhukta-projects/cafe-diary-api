@@ -69,7 +69,6 @@ def email_status():
     return {
         "resend_configured": bool(key),
         "key_prefix": key[:8] + "..." if len(key) > 8 else "NOT SET",
-        "render_env": bool(os.environ.get("RENDER")),
     }
 
 @app.get("/api/last-email-result")
@@ -949,7 +948,7 @@ def health_check():
 
 
 # ═══════════════════════════════════════════════════════════════
-#  IMAGE UPLOAD (Self-hosted — replaces Cloudinary)
+#  IMAGE UPLOAD (Self-hosted)
 # ═══════════════════════════════════════════════════════════════
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
