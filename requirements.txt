@@ -6,3 +6,4 @@ python-jose[cryptography]==3.3.0
 bcrypt==4.2.1
 python-multipart==0.0.6
 psycopg2-binary==2.9.9
+aiofiles==23.2.1

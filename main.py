@@ -1,12 +1,16 @@
 import json
+import os
 import random
 import string
+import uuid
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import List
 
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from database import engine, get_db, Base
@@ -24,12 +28,17 @@ from email_service import send_otp_email, last_email_result
 
 Base.metadata.create_all(bind=engine)
 
+# ─── Upload directory ───────────────────────────────────────────
+
+UPLOADS_DIR = Path(__file__).parent / "uploads"
+UPLOADS_DIR.mkdir(exist_ok=True)
+
 # ─── FastAPI App ────────────────────────────────────────────────
 
 app = FastAPI(
     title="Café Diary API",
     description="Backend API for the Café Diary mobile app",
-    version="1.0.0",
+    version="2.0.0",
 )
 
 # Allow requests from the React Native app (any origin for dev)
@@ -40,6 +49,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ─── Serve uploaded images as static files ─────────────────────
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 
 # ─── Helper: Generate OTP ──────────────────────────────────────
@@ -97,33 +109,6 @@ def db_stats(db: Session = Depends(get_db)):
     }
 
 
-@app.get("/api/admin/export-all")
-def export_all(db: Session = Depends(get_db)):
-    """TEMPORARY: Full data export for migration. Remove after migration is complete."""
-    users = db.query(User).all()
-    cafes = db.query(Cafe).all()
-    return {
-        "users": [
-            {
-                "id": u.id, "name": u.name, "email": u.email,
-                "phone": u.phone, "password_hash": u.password_hash,
-                "is_verified": u.is_verified,
-                "created_at": u.created_at.isoformat() if u.created_at else None,
-            }
-            for u in users
-        ],
-        "cafes": [
-            {
-                "id": c.id, "user_id": c.user_id, "name": c.name,
-                "city": c.city, "drink": c.drink, "rating": c.rating,
-                "notes": c.notes, "latitude": c.latitude, "longitude": c.longitude,
-                "is_saved": c.is_saved, "is_shared": c.is_shared,
-                "image_url": c.image_url,
-                "created_at": c.created_at.isoformat() if c.created_at else None,
-            }
-            for c in cafes
-        ],
-    }
 
 
 @app.get("/api/admin/migrate")
@@ -960,4 +945,57 @@ def get_shared_single_cafe(user_id: int, cafe_id: int, db: Session = Depends(get
 @app.get("/api/health")
 def health_check():
     """Simple health check endpoint."""
-    return {"status": "ok", "app": "Café Diary API", "version": "1.0.0"}
+    return {"status": "ok", "app": "Café Diary API", "version": "2.0.0"}
+
+
+# ═══════════════════════════════════════════════════════════════
+#  IMAGE UPLOAD (Self-hosted — replaces Cloudinary)
+# ═══════════════════════════════════════════════════════════════
+
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+@app.post("/api/upload")
+async def upload_image(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Upload an image to the server's local filesystem.
+    Returns the public URL for the uploaded image.
+    Requires authentication.
+    """
+    # Validate file type
+    ext = Path(file.filename).suffix.lower() if file.filename else ".jpg"
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File type '{ext}' not allowed. Use: {', '.join(ALLOWED_EXTENSIONS)}",
+        )
+
+    # Read and validate size
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)} MB.",
+        )
+
+    # Save with a unique name to avoid collisions
+    unique_name = f"{uuid.uuid4().hex}{ext}"
+    file_path = UPLOADS_DIR / unique_name
+
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    # Build public URL — works behind Apache reverse proxy
+    # The /uploads/ path is served as static files
+    public_url = f"/uploads/{unique_name}"
+
+    return {
+        "secure_url": public_url,
+        "filename": unique_name,
+        "size": len(contents),
+    }
+
