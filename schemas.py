@@ -24,6 +24,13 @@ class ResendOTPRequest(BaseModel):
     email: EmailStr
 
 
+class ResetPasswordRequest(BaseModel):
+    """Request body for password reset."""
+    email: EmailStr
+    otp: str
+    new_password: str
+
+
 class LoginRequest(BaseModel):
     """Request body for login."""
     email: EmailStr

@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from database import engine, get_db, Base
 from models import User, Cafe
 from schemas import (
-    RegisterRequest, VerifyOTPRequest, ResendOTPRequest,
+    RegisterRequest, VerifyOTPRequest, ResendOTPRequest, ResetPasswordRequest,
     LoginRequest, TokenResponse, MessageResponse,
     UserResponse, UpdateProfileRequest,
     CafeCreate, CafeUpdate, CafeResponse,
@@ -120,6 +120,92 @@ def migrate_db(db: Session = Depends(get_db)):
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@app.post("/api/admin/reset-password")
+def admin_reset_password(email: str, new_password: str, db: Session = Depends(get_db)):
+    """Admin: reset a user's password directly."""
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.password_hash = hash_password(new_password)
+    db.commit()
+    return {"message": f"Password reset for {email}"}
+
+
+# ═══════════════════════════════════════════════════════════════
+#  FORGOT PASSWORD ENDPOINTS
+# ═══════════════════════════════════════════════════════════════
+
+
+@app.post("/api/forgot-password", response_model=MessageResponse)
+def forgot_password(req: ResendOTPRequest, db: Session = Depends(get_db)):
+    """
+    Request a password reset OTP.
+    
+    Generates a 6-digit OTP, stores it on the user record,
+    and sends it via email (or prints to console if email isn't configured).
+    """
+    user = db.query(User).filter(User.email == req.email).first()
+    if not user:
+        # Don't reveal whether the email exists — return generic message
+        return MessageResponse(message="If an account exists with that email, a reset code has been sent.")
+
+    otp = generate_otp(6)
+    otp_expires = datetime.utcnow() + timedelta(minutes=10)
+
+    user.otp_code = otp
+    user.otp_expires_at = otp_expires
+    db.commit()
+
+    # Try sending via email; falls back to console logging
+    send_otp_email(req.email, otp, user.name)
+    print(f"🔑 Password reset OTP for {req.email}: {otp}")
+
+    return MessageResponse(message="If an account exists with that email, a reset code has been sent.")
+
+
+@app.post("/api/reset-password", response_model=MessageResponse)
+def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Reset user's password using the OTP received via email.
+    """
+    user = db.query(User).filter(User.email == req.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with this email",
+        )
+
+    # Verify OTP
+    if user.otp_code != req.otp:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid reset code",
+        )
+
+    # Check expiry
+    if user.otp_expires_at and datetime.utcnow() > user.otp_expires_at:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reset code has expired. Please request a new one.",
+        )
+
+    # Validate new password
+    if len(req.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 6 characters",
+        )
+
+    # Update password and clear OTP
+    user.password_hash = hash_password(req.new_password)
+    user.otp_code = None
+    user.otp_expires_at = None
+    db.commit()
+
+    return MessageResponse(message="Password reset successfully! You can now sign in with your new password.")
+
 
 # ═══════════════════════════════════════════════════════════════
 #  AUTH ENDPOINTS
