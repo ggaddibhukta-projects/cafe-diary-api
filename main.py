@@ -11,6 +11,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import engine, get_db, Base
@@ -54,11 +55,53 @@ app.add_middleware(
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 
-# ─── Helper: Generate OTP ──────────────────────────────────────
+# ─── Helper: Generate OTP & User Finder ────────────────────────
 
 def generate_otp(length: int = 6) -> str:
     """Generate a random numeric OTP of the given length."""
     return "".join(random.choices(string.digits, k=length))
+
+
+def find_user_by_identifier(identifier: str, db: Session):
+    """
+    Find user by email or username, case-insensitive, supporting:
+    - exact email match (case-insensitive)
+    - spelling alias: harshitha <-> harsitha
+    - username without domain (e.g. harshitha.sonu -> harsitha.sonu@gmail.com)
+    - user display name
+    """
+    if not identifier:
+        return None
+    raw = identifier.strip().lower()
+
+    # 1. Exact case-insensitive match on email
+    user = db.query(User).filter(func.lower(User.email) == raw).first()
+    if user:
+        return user
+
+    # 2. Spelling alias (harshitha <-> harsitha)
+    alt = raw.replace("harshitha", "harsitha") if "harshitha" in raw else raw.replace("harsitha", "harshitha")
+    if alt != raw:
+        user = db.query(User).filter(func.lower(User.email) == alt).first()
+        if user:
+            return user
+
+    # 3. If no domain provided, try with @gmail.com or prefix
+    if "@" not in raw:
+        for candidate in [raw, alt]:
+            user = db.query(User).filter(func.lower(User.email) == f"{candidate}@gmail.com").first()
+            if user:
+                return user
+            user = db.query(User).filter(func.lower(User.email).like(f"{candidate}@%")).first()
+            if user:
+                return user
+
+    # 4. Try matching on name
+    user = db.query(User).filter(func.lower(User.name) == raw).first()
+    if user:
+        return user
+
+    return None
 
 
 @app.get("/api/email-status")
@@ -125,12 +168,12 @@ def migrate_db(db: Session = Depends(get_db)):
 @app.post("/api/admin/reset-password")
 def admin_reset_password(email: str, new_password: str, db: Session = Depends(get_db)):
     """Admin: reset a user's password directly."""
-    user = db.query(User).filter(User.email == email).first()
+    user = find_user_by_identifier(email, db)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     user.password_hash = hash_password(new_password)
     db.commit()
-    return {"message": f"Password reset for {email}"}
+    return {"message": f"Password reset for {user.email}"}
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -146,7 +189,7 @@ def forgot_password(req: ResendOTPRequest, db: Session = Depends(get_db)):
     Generates a 6-digit OTP, stores it on the user record,
     and sends it via email (or prints to console if email isn't configured).
     """
-    user = db.query(User).filter(User.email == req.email).first()
+    user = find_user_by_identifier(req.email, db)
     if not user:
         # Don't reveal whether the email exists — return generic message
         return MessageResponse(message="If an account exists with that email, a reset code has been sent.")
@@ -159,8 +202,8 @@ def forgot_password(req: ResendOTPRequest, db: Session = Depends(get_db)):
     db.commit()
 
     # Try sending via email; falls back to console logging
-    send_otp_email(req.email, otp, user.name)
-    print(f"🔑 Password reset OTP for {req.email}: {otp}")
+    send_otp_email(user.email, otp, user.name)
+    print(f"🔑 Password reset OTP for {user.email}: {otp}")
 
     return MessageResponse(message="If an account exists with that email, a reset code has been sent.")
 
@@ -170,7 +213,7 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     """
     Reset user's password using the OTP received via email.
     """
-    user = db.query(User).filter(User.email == req.email).first()
+    user = find_user_by_identifier(req.email, db)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -341,12 +384,12 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     Authenticate a user and return a JWT token.
     
     Flow:
-    1. Find user by email
+    1. Find user by email or username (case-insensitive, handling aliases)
     2. Verify password
     3. Check email is verified
     4. Generate and return JWT access token
     """
-    user = db.query(User).filter(User.email == req.email).first()
+    user = find_user_by_identifier(req.email, db)
 
     if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(

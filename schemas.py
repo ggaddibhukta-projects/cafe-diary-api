@@ -20,20 +20,20 @@ class VerifyOTPRequest(BaseModel):
 
 
 class ResendOTPRequest(BaseModel):
-    """Request body to resend OTP."""
-    email: EmailStr
+    """Request body to resend OTP or request password reset."""
+    email: str
 
 
 class ResetPasswordRequest(BaseModel):
     """Request body for password reset."""
-    email: EmailStr
+    email: str
     otp: str
     new_password: str
 
 
 class LoginRequest(BaseModel):
-    """Request body for login."""
-    email: EmailStr
+    """Request body for login (accepts email or username)."""
+    email: str
     password: str
 
 
